@@ -5,20 +5,30 @@ import traceback
 import config
 from storage import load_seen, save_seen
 from notifier import send_telegram_message
-from scrapers import scrape_olx, scrape_storia, scrape_publi24
+from scrapers import scrape_storia, scrape_publi24
 
+# OLX e scos de-a dreptul din cod: site-ul blocheaza sistematic cererile
+# venite de pe serverele GitHub Actions (eroare 403, blocare de IP,
+# confirmata). Nu se poate rezolva din config.py, deci il dezactivam aici
+# direct, indiferent ce scrie in config.py.
 SCRAPERS = {
-    "olx": scrape_olx,
     "storia": scrape_storia,
     "publi24": scrape_publi24,
 }
 
+# Valori implicite in caz ca fisierul config.py de pe GitHub e o versiune
+# mai veche, careia ii lipsesc unele setari noi (ca sa nu pice scriptul
+# cu AttributeError daca uiti sa actualizezi config.py).
+ONLY_OWNERS = getattr(config, "ONLY_OWNERS", True)
+KEYWORDS_EXCLUDE = getattr(config, "KEYWORDS_EXCLUDE", [])
+SOURCES = getattr(config, "SOURCES", {"storia": True, "publi24": True})
+
 
 def passes_filters(ad):
-    if config.ONLY_OWNERS and ad.get("is_agency") is True:
+    if ONLY_OWNERS and ad.get("is_agency") is True:
         return False
     title_lower = ad["title"].lower()
-    for kw in config.KEYWORDS_EXCLUDE:
+    for kw in KEYWORDS_EXCLUDE:
         if kw.lower() in title_lower:
             return False
     return True
@@ -34,11 +44,8 @@ def run_once(debug=False):
     first_run = len(seen) == 0
     new_ads = []
 
-    for name, enabled in config.SOURCES.items():
-        if not enabled:
-            continue
-        scraper_fn = SCRAPERS.get(name)
-        if not scraper_fn:
+    for name, scraper_fn in SCRAPERS.items():
+        if not SOURCES.get(name, True):
             continue
         try:
             ads = scraper_fn(debug=debug)
