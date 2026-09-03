@@ -15,6 +15,8 @@ SCRAPERS = {
 
 
 def passes_filters(ad):
+    if config.ONLY_OWNERS and ad.get("is_agency") is True:
+        return False
     title_lower = ad["title"].lower()
     for kw in config.KEYWORDS_EXCLUDE:
         if kw.lower() in title_lower:
