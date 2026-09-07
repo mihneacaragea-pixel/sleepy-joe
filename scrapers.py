@@ -266,14 +266,24 @@ def scrape_publi24(url=None, debug=False):
     if debug:
         print(f"[Publi24] {len(all_links)} linkuri <a> totale pe pagina, "
               f"{len(links_with_anunt)} contin '/anunt/' in href")
+        with_html = [a for a in links_with_anunt if a["href"].endswith(".html")]
+        print(f"[Publi24] Din acestea, {len(with_html)} se termina exact in '.html'")
+        if links_with_anunt:
+            for sample in links_with_anunt[:3]:
+                txt = sample.get_text(strip=True)
+                print(f"[Publi24] exemplu href={sample['href']!r} text={txt!r}")
 
     for a in all_links:
         href = a["href"]
-        if "/anunt/" not in href or not href.endswith(".html") or href in seen_hrefs:
+        if "/anunt/" not in href or ".html" not in href or href in seen_hrefs:
             continue
         seen_hrefs.add(href)
 
         title = a.get_text(strip=True)
+        if not title:
+            img = a.find("img")
+            if img and img.get("alt"):
+                title = img["alt"].strip()
         if not title:
             continue
 
