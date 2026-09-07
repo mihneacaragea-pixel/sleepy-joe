@@ -261,7 +261,13 @@ def scrape_publi24(url=None, debug=False):
     seen_hrefs = set()
     agency_count = 0
 
-    for a in soup.find_all("a", href=True):
+    all_links = soup.find_all("a", href=True)
+    links_with_anunt = [a for a in all_links if "/anunt/" in a["href"]]
+    if debug:
+        print(f"[Publi24] {len(all_links)} linkuri <a> totale pe pagina, "
+              f"{len(links_with_anunt)} contin '/anunt/' in href")
+
+    for a in all_links:
         href = a["href"]
         if "/anunt/" not in href or not href.endswith(".html") or href in seen_hrefs:
             continue
@@ -293,8 +299,10 @@ def scrape_publi24(url=None, debug=False):
         print(f"[Publi24] {len(results)} anunturi gasite, "
               f"{agency_count} marcate ca agentie (best-effort)")
         if not results:
-            snippet = html[:500].replace("\n", " ")
-            print(f"[Publi24] 0 rezultate desi HTTP 200 — fragment din pagina primita: {snippet!r}")
+            mid = len(html) // 3
+            snippet = html[mid:mid + 800].replace("\n", " ")
+            print(f"[Publi24] 0 rezultate desi HTTP 200. Fragment din mijlocul "
+                  f"paginii ({mid} caractere lungime totala {len(html)}): {snippet!r}")
 
     return results
 
