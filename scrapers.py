@@ -50,16 +50,13 @@ _visited_homepages = set()
 
 def _fetch(url, source="?", debug=False):
     try:
-        # Vizitam intai pagina principala a site-ului, ca sa primim
-        # cookie-urile initiale (unele sisteme anti-bot verifica asta),
-        # apoi cerem pagina reala cu Referer setat spre site.
         parts = url.split("/")
         homepage = f"{parts[0]}//{parts[2]}/"
         if homepage not in _visited_homepages:
             try:
                 _session.get(homepage, timeout=15)
             except requests.RequestException:
-                pass  # daca esueaza homepage-ul, incercam oricum pagina reala
+                pass
             _visited_homepages.add(homepage)
 
         resp = _session.get(url, headers={"Referer": homepage}, timeout=20)
@@ -71,8 +68,6 @@ def _fetch(url, source="?", debug=False):
         print(f"[{source}] HTTP {resp.status_code}, {len(resp.text)} caractere primite de la {url}")
 
     if resp.status_code != 200:
-        # Afisam un fragment din raspuns - deseori aici scrie exact ce s-a
-        # intamplat (pagina de verificare anti-bot, captcha, etc.)
         snippet = resp.text[:300].replace("\n", " ")
         print(f"[{source}] HTTP {resp.status_code} neasteptat. Fragment din raspuns: {snippet!r}")
 
@@ -104,7 +99,6 @@ def scrape_olx(url=None, debug=False):
         if href.startswith("/"):
             href = "https://www.olx.ro" + href
 
-        # ID-ul OLX apare de obicei in URL ca "...-IDxxxxxxx.html"
         m = re.search(r"-ID([a-zA-Z0-9]+)\.html", href)
         ad_id = m.group(1) if m else href
 
@@ -114,11 +108,6 @@ def scrape_olx(url=None, debug=False):
         price_tag = card.select_one('[data-testid="ad-price"]')
         price = price_tag.get_text(strip=True) if price_tag else "N/A"
 
-        # OLX marcheaza anunturile de la conturi de tip "Firma" cu o
-        # eticheta vizibila pe card (agentiile imobiliare posteaza de pe
-        # conturi de firma). Filtrul din URL (private_business=private)
-        # ar trebui sa elimine deja majoritatea, dar verificam si aici
-        # ca rezerva, in caz ca parametrul nu e respectat de site.
         card_text = card.get_text(" ", strip=True)
         is_business = "Firmă" in card_text or "Firma" in card_text
 
@@ -143,11 +132,6 @@ def scrape_olx(url=None, debug=False):
 # ---------------------------------------------------------------------------
 
 def _storia_is_agency(item):
-    """
-    Cea mai buna estimare, din campuri JSON cunoscute de la site-uri similare
-    (Otodom/Storia). Structura reala se poate schimba — ruleaza cu --debug
-    ca sa vezi cheile disponibile si ajusteaza aici daca e nevoie.
-    """
     if item.get("isPrivateOwner") is True:
         return False
     if item.get("isPrivateOwner") is False:
@@ -159,13 +143,10 @@ def _storia_is_agency(item):
     if advertiser_type:
         return advertiser_type != "private"
 
-    # Daca anuntul are un nume de agentie/dezvoltator atasat, il consideram agentie.
     agency = item.get("agency") or item.get("agencyName") or item.get("developerName")
     if agency:
         return True
 
-    # Necunoscut -> nu excludem (mai bine trimitem in plus decat sa ratam
-    # un anunt de la proprietar din cauza unui camp gresit ghicit).
     return False
 
 
@@ -214,7 +195,6 @@ def scrape_storia(url=None, debug=False):
             if debug:
                 print(f"[Storia] Parsarea JSON a esuat ({e}), trec pe fallback HTML")
 
-    # Fallback: cauta direct linkurile catre oferte in HTML
     if debug:
         print("[Storia] Folosesc fallback bazat pe linkuri <a href='/ro/oferta/...'>")
     seen_hrefs = set()
@@ -231,23 +211,20 @@ def scrape_storia(url=None, debug=False):
             "price": "N/A",
             "url": full_url,
             "source": "Storia",
-            "is_agency": None,  # necunoscut in modul fallback -> nu filtram dupa asta
+            "is_agency": None,
         })
     return results
-  # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
 # Publi24
 # ---------------------------------------------------------------------------
 
-# Cuvinte care, gasite in descrierea unui anunt, indica aproape sigur ca
-# a fost postat de proprietar direct (verificat manual pe anunturi reale
-# de pe Publi24 — proprietarii scriu aproape mereu unul din tiparele astea).
 _PUBLI24_OWNER_HINTS = [
     "proprietar", "particular,", "particular ", "direct proprietar",
     "fara agentie", "fără agenție", "fara agentii", "fără agenții",
 ]
 
-# Tipare care indica o agentie: numele firmei urmat de o formula de genul
-# "va propune"/"va oferi", sau mentionarea explicita a cuvantului agentie.
 _PUBLI24_AGENCY_PATTERNS = [
     r"v[ăa]\s+propun[eă]", r"v[ăa]\s+ofer[ăa]", r"v[ăa]\s+prezint[ăa]",
     r"agen[țt]i[ae]\s+imobiliar", r"imobiliare\s+v[ăa]",
@@ -255,8 +232,6 @@ _PUBLI24_AGENCY_PATTERNS = [
 
 
 def _publi24_card_text(a_tag):
-    """Incearca sa gaseasca textul complet al cardului (titlu + descriere),
-    urcand prin parintii tagului <a> pana gaseste un bloc cu text suficient."""
     node = a_tag
     for _ in range(6):
         if node.parent is None:
@@ -275,8 +250,6 @@ def _publi24_is_agency(card_text):
     for pat in _PUBLI24_AGENCY_PATTERNS:
         if re.search(pat, text_lower):
             return True
-    # Niciun semnal clar -> nu excludem (mai bine trimitem in plus decat
-    # sa ratam un anunt real de la un proprietar).
     return False
 
 
@@ -298,7 +271,6 @@ def scrape_publi24(url=None, debug=False):
 
         title = a.get_text(strip=True)
         if not title:
-            # unele linkuri sunt doar pe imagine, fara text -> le sarim
             continue
 
         full_url = href if href.startswith("http") else "https://www.publi24.ro" + href
@@ -334,10 +306,7 @@ def scrape_publi24(url=None, debug=False):
 # ---------------------------------------------------------------------------
 
 def _clean_duplicated_title(text):
-    """Site-urile astea repeta adesea titlul de doua ori in acelasi <a>
-    (o data din alt-ul imaginii, o data din textul vizibil). Detectam si
-    pastram o singura copie."""
-    text = " ".join(text.split())  # normalizeaza toate spatiile/liniile noi
+    text = " ".join(text.split())
     text = re.sub(r"heart", "", text, flags=re.IGNORECASE).strip()
     text = " ".join(text.split())
     half = len(text) // 2
@@ -380,9 +349,6 @@ def scrape_lajumate(url=None, debug=False):
             "price": price,
             "url": full_url,
             "source": "Lajumate",
-            # Nu exista semnal de proprietar/agentie vizibil pe pagina de
-            # cautare (nici o descriere, nici o eticheta) -> necunoscut,
-            # nu filtram dupa asta pentru acest site.
             "is_agency": None,
         })
 
@@ -433,8 +399,6 @@ def scrape_homezz(url=None, debug=False):
             "price": price,
             "url": full_url,
             "source": "HomeZZ",
-            # La fel ca Lajumate: nicio distinctie proprietar/agentie
-            # vizibila pe pagina de cautare -> necunoscut.
             "is_agency": None,
         })
 
