@@ -5,7 +5,7 @@ import traceback
 import config
 from storage import load_seen, save_seen
 from notifier import send_telegram_message
-from scrapers import scrape_storia, scrape_publi24
+from scrapers import scrape_storia, scrape_publi24, scrape_lajumate, scrape_homezz
 
 # OLX e scos de-a dreptul din cod: site-ul blocheaza sistematic cererile
 # venite de pe serverele GitHub Actions (eroare 403, blocare de IP,
@@ -14,6 +14,8 @@ from scrapers import scrape_storia, scrape_publi24
 SCRAPERS = {
     "storia": scrape_storia,
     "publi24": scrape_publi24,
+    "lajumate": scrape_lajumate,
+    "homezz": scrape_homezz,
 }
 
 # Valori implicite in caz ca fisierul config.py de pe GitHub e o versiune
@@ -21,7 +23,7 @@ SCRAPERS = {
 # cu AttributeError daca uiti sa actualizezi config.py).
 ONLY_OWNERS = getattr(config, "ONLY_OWNERS", True)
 KEYWORDS_EXCLUDE = getattr(config, "KEYWORDS_EXCLUDE", [])
-SOURCES = getattr(config, "SOURCES", {"storia": True, "publi24": True})
+SOURCES = getattr(config, "SOURCES", {"storia": True, "publi24": True, "lajumate": True, "homezz": True})
 
 
 def passes_filters(ad):
