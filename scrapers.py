@@ -234,9 +234,7 @@ def scrape_storia(url=None, debug=False):
             "is_agency": None,  # necunoscut in modul fallback -> nu filtram dupa asta
         })
     return results
-
-
-# ---------------------------------------------------------------------------
+  # ---------------------------------------------------------------------------
 # Publi24
 # ---------------------------------------------------------------------------
 
@@ -327,5 +325,123 @@ def scrape_publi24(url=None, debug=False):
         if not results:
             snippet = html[:500].replace("\n", " ")
             print(f"[Publi24] 0 rezultate desi HTTP 200 — fragment din pagina primita: {snippet!r}")
+
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Lajumate
+# ---------------------------------------------------------------------------
+
+def _clean_duplicated_title(text):
+    """Site-urile astea repeta adesea titlul de doua ori in acelasi <a>
+    (o data din alt-ul imaginii, o data din textul vizibil). Detectam si
+    pastram o singura copie."""
+    text = " ".join(text.split())  # normalizeaza toate spatiile/liniile noi
+    text = re.sub(r"heart", "", text, flags=re.IGNORECASE).strip()
+    text = " ".join(text.split())
+    half = len(text) // 2
+    if half > 5 and text[:half].strip() == text[half:half * 2].strip():
+        return text[:half].strip()
+    return text
+
+
+def scrape_lajumate(url=None, debug=False):
+    from config import SEARCH_URLS
+    url = url or SEARCH_URLS["lajumate"]
+
+    html = _fetch(url, source="Lajumate", debug=debug)
+    soup = BeautifulSoup(html, "html.parser")
+    results = []
+    seen_hrefs = set()
+
+    for a in soup.find_all("a", href=True):
+        href = a["href"]
+        if not href.startswith("/ad/") or href in seen_hrefs:
+            continue
+        seen_hrefs.add(href)
+
+        m = re.search(r"-(\d+)/?$", href.rstrip("/"))
+        ad_id = m.group(1) if m else href
+        full_url = "https://lajumate.ro" + href
+
+        text = a.get_text(" ", strip=True)
+        if not text:
+            continue
+
+        price_match = re.search(r"[\d.,]+\s*(eur|lei)", text, re.IGNORECASE)
+        title_part = text[:price_match.start()] if price_match else text
+        title = _clean_duplicated_title(title_part) or "Anunt fara titlu"
+        price = price_match.group(0) if price_match else "N/A"
+
+        results.append({
+            "id": f"lajumate_{ad_id}",
+            "title": title,
+            "price": price,
+            "url": full_url,
+            "source": "Lajumate",
+            # Nu exista semnal de proprietar/agentie vizibil pe pagina de
+            # cautare (nici o descriere, nici o eticheta) -> necunoscut,
+            # nu filtram dupa asta pentru acest site.
+            "is_agency": None,
+        })
+
+    if debug:
+        print(f"[Lajumate] {len(results)} anunturi gasite")
+        if not results:
+            snippet = html[:500].replace("\n", " ")
+            print(f"[Lajumate] 0 rezultate desi HTTP 200 — fragment din pagina primita: {snippet!r}")
+
+    return results
+
+
+# ---------------------------------------------------------------------------
+# HomeZZ
+# ---------------------------------------------------------------------------
+
+def scrape_homezz(url=None, debug=False):
+    from config import SEARCH_URLS
+    url = url or SEARCH_URLS["homezz"]
+
+    html = _fetch(url, source="HomeZZ", debug=debug)
+    soup = BeautifulSoup(html, "html.parser")
+    results = []
+    seen_hrefs = set()
+
+    for a in soup.find_all("a", href=True):
+        href = a["href"]
+        if not re.search(r"-(\d+)\.html$", href) or href in seen_hrefs:
+            continue
+        seen_hrefs.add(href)
+
+        m = re.search(r"-(\d+)\.html$", href)
+        ad_id = m.group(1)
+        full_url = href if href.startswith("http") else "https://homezz.ro" + href
+
+        text = a.get_text(" ", strip=True)
+        if not text:
+            continue
+
+        price_match = re.search(r"[\d.,]+\s*€", text)
+        title_part = text[:price_match.start()] if price_match else text
+        title = _clean_duplicated_title(title_part) or "Anunt fara titlu"
+        price = price_match.group(0) if price_match else "N/A"
+
+        results.append({
+            "id": f"homezz_{ad_id}",
+            "title": title,
+            "price": price,
+            "url": full_url,
+            "source": "HomeZZ",
+            # La fel ca Lajumate: nicio distinctie proprietar/agentie
+            # vizibila pe pagina de cautare -> necunoscut.
+            "is_agency": None,
+        })
+
+    if debug:
+        print(f"[HomeZZ] {len(results)} anunturi gasite")
+        if not results:
+            snippet = html[:500].replace("\n", " ")
+            print(f"[HomeZZ] 0 rezultate desi HTTP 200 — fragment din pagina primita: {snippet!r}")
 
     return results
